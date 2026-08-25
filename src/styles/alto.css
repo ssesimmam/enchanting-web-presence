@@ -152,3 +152,6 @@
     font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.14em;color:var(--parchment-dim);
     transition:opacity .8s ease;
   }
+
+/* ---------- ensure the terrace stage owns the page background ---------- */
+html:root, html:root body { background: var(--ink); color: var(--parchment); }
