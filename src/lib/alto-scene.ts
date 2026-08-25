@@ -3,6 +3,15 @@
 import * as THREE from "three";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {
+  applyPBRMaps,
+  createSkyEnvironment,
+  createPostPipeline,
+  createAtmosphere,
+  makeContactShadow,
+  makeRealisticFigure,
+  animateFigure,
+} from "@/lib/alto-realism";
 
 export function initAltoScene(root: HTMLElement): () => void {
 
@@ -62,47 +71,68 @@ const canvas = root.querySelector('canvas#gl');
 const scene = new THREE.Scene();
 const skyDay = new THREE.Color('#BCD9EA');
 const skyGold = new THREE.Color('#E8A15C');
-scene.fog = new THREE.Fog(skyDay.getHex(), 18, 60);
-scene.background = skyDay.clone();
+// light atmospheric haze rather than a flat colour wash
+scene.fog = new THREE.FogExp2(skyDay.getHex(), 0.0045);
 
-const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 200);
+// 35mm-equivalent architectural lens
+const camera = new THREE.PerspectiveCamera(38, window.innerWidth/window.innerHeight, 0.1, 3000);
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const isMobile = window.innerWidth < 760;
+const quality = isMobile ? 'low' : (window.devicePixelRatio > 2 ? 'medium' : 'high');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
-renderer.outputColorSpace = THREE.SRGBColorSpace || renderer.outputColorSpace;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+
+/* ---- physical sky + image based lighting ---- */
+const skyEnv = createSkyEnvironment(renderer, scene);
+skyEnv.sky.scale.setScalar(1200);
+skyEnv.update(42, 128, 3.4, 1.9);
+skyEnv.refreshEnvironment();
+
+/* ---- cinematic post: AO, depth of field, subtle bloom ---- */
+const post = createPostPipeline(renderer, scene, camera, quality);
+
+/* ---- airborne dust / pollen ---- */
+const atmosphere = createAtmosphere(isMobile ? 220 : 700);
+scene.add(atmosphere.points);
 
 function onResize(){
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  post.setSize(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', onResize);
 
-const isMobile = window.innerWidth < 760;
-
 /* ============================================================
-   LIGHTS
+   LIGHTS  (sun + sky bounce + warm architectural fill)
 =============================================================*/
-const hemi = new THREE.HemisphereLight(0xdfeeff, 0x3a342c, 0.75);
+const hemi = new THREE.HemisphereLight(0xcfe3f5, 0x4a4136, 0.55);
 scene.add(hemi);
 
-const sun = new THREE.DirectionalLight(0xffffff, 1.15);
+const sun = new THREE.DirectionalLight(0xfff4e2, 2.6);
 sun.position.set(10, 16, 8);
 sun.castShadow = !isMobile;
 if(!isMobile){
-  sun.shadow.mapSize.set(1024,1024);
-  sun.shadow.camera.left = -14; sun.shadow.camera.right = 14;
-  sun.shadow.camera.top = 14; sun.shadow.camera.bottom = -14;
-  sun.shadow.camera.far = 40;
-  sun.shadow.bias = -0.0025;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -13; sun.shadow.camera.right = 13;
+  sun.shadow.camera.top = 13; sun.shadow.camera.bottom = -13;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 80;
+  sun.shadow.bias = -0.00006;
+  sun.shadow.normalBias = 0.035;
+  sun.shadow.radius = 2.4;
 }
 scene.add(sun);
 scene.add(sun.target);
 
-const fillLight = new THREE.PointLight(0xffe3c2, 0.25, 30);
+const fillLight = new THREE.PointLight(0xffe3c2, 6, 26, 2);
 fillLight.position.set(-6, 4, 6);
 scene.add(fillLight);
 
@@ -161,6 +191,14 @@ const M = {
   hair: new THREE.MeshStandardMaterial({ color:0x241f1b, roughness:0.9 }),
   buildingFar: new THREE.MeshStandardMaterial({ color:0x5a6572, roughness:1 }),
 };
+
+/* photoreal surfacing: procedural PBR colour / roughness / normal maps */
+applyPBRMaps(M);
+// tighter physical response for metals & polished wood
+M.metalFrame.metalness = 0.95; M.metalFrame.roughness = 0.32;
+M.pipe.metalness = 0.9; M.pipe.roughness = 0.42;
+M.tableWood.roughness = 0.42;
+M.concrete.roughness = 0.92; M.concrete.metalness = 0.0;
 
 /* ============================================================
    TERRACE BASE  (always visible — the constant reference)
@@ -240,37 +278,8 @@ gEnvironment.add(skylineGroup);
    HUMANOID BUILDER
 =============================================================*/
 function makeFigure(kit){
-  const g = new THREE.Group();
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.19,0.5,10), kit.top);
-  torso.position.y = 0.95; torso.castShadow = true;
-  g.add(torso);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10), kit.skin);
-  head.position.y = 1.32; head.castShadow = true;
-  g.add(head);
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.135,10,8,0,Math.PI*2,0,Math.PI*0.55), kit.hair);
-  hair.position.y = 1.36;
-  g.add(hair);
-
-  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.06,0.55,8), kit.bottom);
-  legL.position.set(-0.08, 0.42, 0); legL.castShadow = true; g.add(legL);
-  const legR = legL.clone(); legR.position.x = 0.08; g.add(legR);
-
-  const armPivotL = new THREE.Group(); armPivotL.position.set(-0.22, 1.16, 0); g.add(armPivotL);
-  const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.045,0.46,8), kit.top);
-  armL.position.y = -0.22; armL.castShadow = true; armPivotL.add(armL);
-
-  const armPivotR = new THREE.Group(); armPivotR.position.set(0.22, 1.16, 0); g.add(armPivotR);
-  const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.045,0.46,8), kit.top);
-  armR.position.y = -0.22; armR.castShadow = true; armPivotR.add(armR);
-
-  if(kit.vest){
-    const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.175,0.2,0.35,10), M.hiVis);
-    vest.position.y = 1.0; g.add(vest);
-  }
-  g.userData.armPivotL = armPivotL;
-  g.userData.armPivotR = armPivotR;
-  g.userData.head = head;
-  return g;
+  // anatomically proportioned, smooth-shaded human with contact shadow
+  return makeRealisticFigure(kit, M);
 }
 
 const worker1 = makeFigure({ top:M.workwear, bottom:M.workwear, skin:M.skinA, hair:M.hair, vest:true });
@@ -738,6 +747,7 @@ function updateText(p){
    MAIN PROGRESS -> SCENE STATE
 =============================================================*/
 let progress = 0;
+let lastEnvStep = -1;
 let clockStart = performance.now();
 
 function applyProgress(p){
@@ -748,21 +758,30 @@ function applyProgress(p){
   tmpLook.copy(lookCurve.getPointAt(ct));
   camera.lookAt(tmpLook);
 
-  /* ---- day -> golden hour environment ---- */
-  const dusk = seg(p, 0.76, 0.98);
-  const skyNow = lerpColor(skyDay, skyGold, easeInOutCubic(dusk));
-  scene.background.copy(skyNow);
+  /* ---- physical sky: midday -> golden hour ---- */
+  const dusk = easeInOutCubic(seg(p, 0.76, 0.98));
+  const skyNow = lerpColor(skyDay, skyGold, dusk);
   scene.fog.color.copy(skyNow);
-  hemi.intensity = lerp(0.78, 0.42, dusk);
-  hemi.color.copy(lerpColor(new THREE.Color(0xdfeeff), new THREE.Color(0xffd9ad), dusk));
-  sun.intensity = lerp(1.2, 0.55, dusk);
-  sun.color.copy(lerpColor(new THREE.Color(0xffffff), new THREE.Color(0xffb066), dusk));
-  const sunAngle = lerp(0.9, 0.18, dusk);
-  sun.position.set(10*Math.cos(sunAngle*0.3), 6+10*sunAngle, 8*Math.cos(sunAngle*0.5));
-  sun.target.position.set(0,0,0);
-  sunSprite.position.set(-16*Math.cos(dusk*0.4), lerp(9, 2.6, dusk), -16 + dusk*4);
-  sunSprite.material.opacity = lerp(0.55, 0.9, dusk);
-  sunSprite.scale.setScalar(lerp(9, 13, dusk));
+  scene.fog.density = lerp(0.0045, 0.0075, dusk);
+
+  const elevation = lerp(46, 3.2, dusk);
+  const azimuth = lerp(126, 168, dusk);
+  const sunDir = skyEnv.update(elevation, azimuth, lerp(2.0, 8.5, dusk), lerp(0.85, 3.4, dusk));
+  sun.position.copy(sunDir).multiplyScalar(34);
+  sun.target.position.set(0, 0, 0);
+  sun.intensity = lerp(9.5, 3.2, dusk);
+  sun.color.copy(lerpColor(new THREE.Color(0xfff3df), new THREE.Color(0xff9c4d), dusk));
+  hemi.intensity = lerp(1.4, 0.7, dusk);
+  hemi.color.copy(lerpColor(new THREE.Color(0xcfe3f5), new THREE.Color(0xffd2a0), dusk));
+  renderer.toneMappingExposure = lerp(0.26, 0.5, dusk);
+  post.setBloom(lerp(0.14, 0.32, dusk));
+  // refresh image-based lighting in coarse steps (expensive)
+  const envStep = Math.round(dusk * 8);
+  if(envStep !== lastEnvStep){ lastEnvStep = envStep; skyEnv.refreshEnvironment(); }
+
+  sunSprite.position.copy(sunDir).multiplyScalar(40);
+  sunSprite.material.opacity = lerp(0.35, 0.85, dusk);
+  sunSprite.scale.setScalar(lerp(10, 18, dusk));
 
   /* ---- workers arrive & move through beats ---- */
   const arrive = seg(p, 0.04, 0.14);
@@ -797,10 +816,16 @@ function applyProgress(p){
     worker1.position.z = lerp(worker1.position.z, 3.6, stepBack);
     worker2.position.z = lerp(worker2.position.z, -3.6, stepBack);
   }
-  // idle bob
+  // natural gait + weight shift
   const t = (performance.now()-clockStart)/1000;
-  worker1.position.y = Math.abs(Math.sin(t*2.4))*0.012;
-  worker2.position.y = Math.abs(Math.sin(t*2.4+1))*0.012;
+  const walking = (arrive > 0.02 && arrive < 0.99) || (build > 0 && build < 1);
+  animateFigure(worker1, t, walking);
+  animateFigure(worker2, t + 0.7, walking);
+  worker1.position.y = walking ? Math.abs(Math.sin(t*5.6))*0.022 : Math.abs(Math.sin(t*1.4))*0.006;
+  worker2.position.y = walking ? Math.abs(Math.sin(t*5.6+1))*0.022 : Math.abs(Math.sin(t*1.4+1))*0.006;
+  // face the direction of travel
+  worker1.rotation.y = lerp(worker1.rotation.y, walking ? Math.PI*0.5 : 0.4, 0.05);
+  worker2.rotation.y = lerp(worker2.rotation.y, walking ? Math.PI*0.5 : -0.5, 0.05);
 
   /* ---- measurement + blueprint ---- */
   setGroupOpacity(gMeasure, seg(p,0.19,0.24) - seg(p,0.30,0.33) > 0
@@ -852,15 +877,15 @@ function applyProgress(p){
   lightRigs.forEach((rig,i)=>{
     const local = clamp01(lightBand*lightRigs.length - i*0.8);
     const inten = Math.max(local, eveningGlow*0.85);
-    rig.bulbMat.emissiveIntensity = inten * 1.4;
+    rig.bulbMat.emissiveIntensity = inten * 3.2;
     if(rig.glow) rig.glow.material.opacity = inten * 0.85;
-    if(rig.pl) rig.pl.intensity = inten * 1.1;
+    if(rig.pl) rig.pl.intensity = inten * 5.5;
   });
 
   /* ---- decor ---- */
   setGroupOpacity(gDecor, seg(p,0.855,0.90));
   if(gDecor.userData.lanternBulb){
-    gDecor.userData.lanternBulb.material.emissiveIntensity = seg(p,0.86,0.92)*1.4;
+    gDecor.userData.lanternBulb.material.emissiveIntensity = seg(p,0.86,0.92)*3.0;
   }
 
   /* ---- people (life) ---- */
@@ -870,7 +895,13 @@ function applyProgress(p){
     const e = easeOutCubic(local);
     f.visible = e > 0.01;
     f.scale.setScalar(Math.max(0.001, 0.92*e) * (f.userData.seatedScale || 1));
+    if(f.visible) animateFigure(f, t*0.5 + i, false);
   });
+
+  /* ---- cinematic depth of field: focus on the look-at target ---- */
+  post.setFocus(Math.max(1.6, camera.position.distanceTo(tmpLook)), lerp(1.35, 0.85, ct));
+  atmosphere.material.opacity = lerp(0.22, 0.5, dusk);
+  atmosphere.update(t);
 
   /* ---- global fade for measurement text sprites re-check ---- */
 
@@ -893,9 +924,15 @@ function applyProgress(p){
 
 /* ---- BOOT + CLEANUP ---- */
 let rafId = 0;
+// subtle hand-held camera drift for a filmed feel
+const shake = new THREE.Vector3();
 function tick(){
   applyProgress(progress);
-  renderer.render(scene, camera);
+  const ms = performance.now()/1000;
+  shake.set(Math.sin(ms*0.45)*0.018, Math.sin(ms*0.63+1.2)*0.014, Math.cos(ms*0.37)*0.012);
+  camera.position.add(shake);
+  (window as any).__alto = { scene, camera, renderer, sun, hemi, post, skyEnv };
+  if(location.search.includes("direct")) renderer.render(scene, camera); else post.composer.render();
   rafId = requestAnimationFrame(tick);
 }
 gsap.registerPlugin(ScrollTrigger);
@@ -918,6 +955,8 @@ return () => {
   cancelAnimationFrame(rafId);
   st.kill();
   window.removeEventListener('resize', onResize);
+  post.dispose();
+  skyEnv.dispose();
   renderer.dispose();
 };
 }
