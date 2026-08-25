@@ -762,7 +762,7 @@ function applyProgress(p){
   const dusk = easeInOutCubic(seg(p, 0.76, 0.98));
   const skyNow = lerpColor(skyDay, skyGold, dusk);
   scene.fog.color.copy(skyNow);
-  scene.fog.density = lerp(0.0045, 0.013, dusk);
+  scene.fog.density = lerp(0.0045, 0.0075, dusk);
 
   const elevation = lerp(46, 3.2, dusk);
   const azimuth = lerp(126, 168, dusk);
@@ -774,7 +774,7 @@ function applyProgress(p){
   hemi.intensity = lerp(1.4, 0.7, dusk);
   hemi.color.copy(lerpColor(new THREE.Color(0xcfe3f5), new THREE.Color(0xffd2a0), dusk));
   renderer.toneMappingExposure = lerp(0.26, 0.5, dusk);
-  post.setBloom(lerp(0.2, 0.62, dusk));
+  post.setBloom(lerp(0.14, 0.32, dusk));
   // refresh image-based lighting in coarse steps (expensive)
   const envStep = Math.round(dusk * 8);
   if(envStep !== lastEnvStep){ lastEnvStep = envStep; skyEnv.refreshEnvironment(); }
