@@ -1,24 +1,155 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
+import { initAltoScene } from "@/lib/alto-scene";
+import "@/styles/alto.css";
+
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "ALTO — From Empty Terrace to Your Own Escape" },
+      {
+        name: "description",
+        content:
+          "ALTO designs and builds outdoor terraces. Scroll through a real-time 3D build: flooring, pergola, seating, greenery and light.",
+      },
+      { property: "og:title", content: "ALTO — From Empty Terrace to Your Own Escape" },
+      {
+        property: "og:description",
+        content:
+          "Watch an empty concrete terrace become a living outdoor escape in an interactive 3D scroll experience.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,400&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap",
+      },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+const STAGES = [
+  { label: "See the space", num: "01" },
+  { label: "Understand", num: "02" },
+  { label: "Plan", num: "03" },
+  { label: "Complete", num: "04" },
+];
+
+const STORY = [
+  {
+    eyebrow: "01 — SEE THE SPACE",
+    lines: ["Before we build anything,", "we understand how the space", "can be lived in."],
+  },
+  {
+    eyebrow: "02 — UNDERSTAND",
+    lines: ["Light. Space. Structure.", "Movement. Everything matters."],
+  },
+  {
+    eyebrow: "03 — PLAN",
+    lines: ["We don't fill the terrace.", "We design how you'll experience it."],
+  },
+  { eyebrow: "04 — COMPLETE", lines: ["Not just a terrace.", "A place to slow down."] },
+];
+
 function Index() {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    let dispose: (() => void) | undefined;
+    try {
+      dispose = initAltoScene(root);
+    } catch (err) {
+      console.error("ALTO scene failed to start", err);
+    }
+    return () => dispose?.();
+  }, []);
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div ref={rootRef} className="alto-root">
+      <div id="loading">PREPARING THE TERRACE…</div>
+
+      <div id="scroll-spacer">
+        <div id="stage">
+          <canvas id="gl" />
+          <div id="grade" />
+          <div id="grain" />
+
+          <div id="rail">
+            <div id="rail-fill" />
+          </div>
+
+          <nav>
+            <div className="brand">
+              ALTO<em>.</em>
+            </div>
+            <div className="navlinks">
+              <a href="#scroll-spacer">Work</a>
+              <a href="#scroll-spacer">Process</a>
+              <a href="#scroll-spacer">Services</a>
+              <a href="#scroll-spacer">About</a>
+            </div>
+            <button className="navcta">Start a Project</button>
+          </nav>
+
+          <div id="stagelist">
+            {STAGES.map((s, i) => (
+              <div className="stagedot" data-i={i} key={s.num}>
+                <span className="label">{s.label}</span>
+                <span className="num">{s.num}</span>
+                <span className="dot" />
+              </div>
+            ))}
+          </div>
+
+          <div id="buildcaption">
+            <span className="bdot" />
+            <span id="buildlabel">Laying the flooring</span>
+          </div>
+
+          <div id="intro">
+            <h1>What could this space become?</h1>
+            <div className="sub">Every transformation starts with an empty terrace.</div>
+            <div className="scrollcue">SCROLL TO TRANSFORM ↓</div>
+          </div>
+
+          {STORY.map((s, i) => (
+            <div className="storytext" data-sec={i} key={s.eyebrow}>
+              <div className="eyebrow">{s.eyebrow}</div>
+              <h2>
+                {s.lines.map((l, j) => (
+                  <span key={l}>
+                    {l}
+                    {j < s.lines.length - 1 ? <br /> : null}
+                  </span>
+                ))}
+              </h2>
+            </div>
+          ))}
+
+          <div id="finale">
+            <h2>
+              From empty terrace
+              <br />
+              to <em>your own escape.</em>
+            </h2>
+            <div className="fsub">
+              We design and build outdoor spaces made for relaxing, gathering and living.
+            </div>
+            <div className="fctas">
+              <button className="btn-primary">Start Your Transformation →</button>
+              <button className="btn-secondary">See What's Possible</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
