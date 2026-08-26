@@ -1,7 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 
-import { initAltoScene } from "@/lib/alto-scene";
+import frame01 from "@/assets/terrace-01-empty.jpg";
+import frame02 from "@/assets/terrace-02-inspect.jpg";
+import frame03 from "@/assets/terrace-03-build.jpg";
+import frame04 from "@/assets/terrace-04-complete.jpg";
+import { initAltoCinematic } from "@/lib/alto-cinematic";
 import "@/styles/alto.css";
 
 export const Route = createFileRoute("/")({
@@ -11,13 +15,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "ALTO designs and builds outdoor terraces. Scroll through a real-time 3D build: flooring, pergola, seating, greenery and light.",
+          "ALTO designs and builds outdoor terraces. Scroll through a cinematic build: flooring, pergola, seating, greenery and light.",
       },
       { property: "og:title", content: "ALTO — From Empty Terrace to Your Own Escape" },
       {
         property: "og:description",
         content:
-          "Watch an empty concrete terrace become a living outdoor escape in an interactive 3D scroll experience.",
+          "Watch an empty concrete terrace become a living outdoor escape in a cinematic scroll experience.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -57,6 +61,16 @@ const STORY = [
   { eyebrow: "04 — COMPLETE", lines: ["Not just a terrace.", "A place to slow down."] },
 ];
 
+const FRAMES = [
+  { src: frame01, alt: "Empty concrete rooftop terrace overlooking the city skyline" },
+  { src: frame02, alt: "Builders inspecting the bare rooftop terrace slab" },
+  { src: frame03, alt: "Craftsmen laying timber decking under a new pergola frame" },
+  {
+    src: frame04,
+    alt: "Finished rooftop terrace at golden hour with pergola, sofa and dining table",
+  },
+];
+
 function Index() {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -65,9 +79,9 @@ function Index() {
     if (!root) return;
     let dispose: (() => void) | undefined;
     try {
-      dispose = initAltoScene(root);
+      dispose = initAltoCinematic(root);
     } catch (err) {
-      console.error("ALTO scene failed to start", err);
+      console.error("ALTO hero failed to start", err);
     }
     return () => dispose?.();
   }, []);
@@ -78,7 +92,20 @@ function Index() {
 
       <div id="scroll-spacer">
         <div id="stage">
-          <canvas id="gl" />
+          <div id="frames">
+            {FRAMES.map((f, i) => (
+              <div className="frame-layer" data-i={i} key={f.src}>
+                <img
+                  src={f.src}
+                  alt={f.alt}
+                  width={1920}
+                  height={1088}
+                  {...(i === 0 ? {} : { loading: "lazy" as const })}
+                />
+              </div>
+            ))}
+          </div>
+          <div id="warm" />
           <div id="grade" />
           <div id="grain" />
 
@@ -111,7 +138,7 @@ function Index() {
 
           <div id="buildcaption">
             <span className="bdot" />
-            <span id="buildlabel">Laying the flooring</span>
+            <span id="buildlabel">Seeing the empty space</span>
           </div>
 
           <div id="intro">
