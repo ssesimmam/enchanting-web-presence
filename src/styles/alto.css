@@ -174,3 +174,13 @@
 
 /* ---------- ensure the terrace stage owns the page background ---------- */
 html:root, html:root body { background: var(--ink); color: var(--parchment); }
+
+/* ---------- legibility scrim over the photoreal frames ---------- */
+#finale::before{
+  content:'';position:absolute;inset:0;z-index:-1;
+  background:radial-gradient(ellipse at 50% 45%, rgba(10,8,6,0.52) 0%, rgba(10,8,6,0.28) 45%, rgba(10,8,6,0) 75%);
+}
+#finale h2, #finale .fsub{text-shadow:0 4px 26px rgba(0,0,0,0.65);}
+#intro h1, #intro .sub{text-shadow:0 4px 26px rgba(0,0,0,0.6);}
+.storytext h2, .storytext .eyebrow{text-shadow:0 4px 22px rgba(0,0,0,0.6);}
+.stagedot .label, .stagedot .num{text-shadow:0 2px 12px rgba(0,0,0,0.6);}
